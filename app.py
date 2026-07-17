@@ -376,6 +376,20 @@ def render_streamlit_header(st_module: object) -> None:
     )
 
 
+def render_recommendation_reasons(
+    st_module: object,
+    recommendation: LearningRecommendation,
+) -> None:
+    """Render the Decision Engine's explainable supporting reasons."""
+    st = st_module
+    if not recommendation.supporting_reasons:
+        return
+
+    st.markdown("**Why Atlas chose this:**")
+    for reason in recommendation.supporting_reasons:
+        st.markdown(f"- {reason}")
+
+
 def render_streamlit_mission(st_module: object) -> None:
     """Render the mission screen."""
     st = st_module
@@ -425,6 +439,7 @@ def render_streamlit_mission(st_module: object) -> None:
         st.markdown(
             f"**Reason:** {recommendation.explanation}",
         )
+        render_recommendation_reasons(st, recommendation)
 
     if st.button(
         "Start Session",
@@ -604,6 +619,7 @@ def render_streamlit_result(st_module: object, questions: list[Question]) -> Non
         )
         st.markdown(f"**{next_recommendation.topic_name}**")
         st.markdown(review.next_mission)
+        render_recommendation_reasons(st, next_recommendation)
 
     if st.button("Return to Mission", use_container_width=True):
         return_to_streamlit_mission(st)
