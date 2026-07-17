@@ -11,6 +11,10 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Notes
+## Current demo
 
-Project Atlas presents one recommended maths mission, runs a short question session, marks answers deterministically, updates mastery, and shows rewards earned for meaningful mission completion.
+Project Atlas presents one recommended maths mission, runs a short question session, marks answers deterministically, updates mastery, shows rewards earned for meaningful mission completion, and ends with a Session Review.
+
+Recent demo updates include:
+- Session Review v1: what Ben practised, what improved, what remains difficult, what Atlas learned, and what Atlas will do next.
+- Better Answer Marking v1: accepts simple equivalent answer forms such as `x = 4`, `4.0`, `.6`, `1/2`, and percentage signs when a percentage answer is requested.
