@@ -18,3 +18,4 @@ Project Atlas presents one recommended maths mission, runs a short question sess
 Recent demo updates include:
 - Session Review v1: what Ben practised, what improved, what remains difficult, what Atlas learned, and what Atlas will do next.
 - Better Answer Marking v1: accepts simple equivalent answer forms such as `x = 4`, `4.0`, `.6`, `1/2`, and percentage signs when a percentage answer is requested.
+- Mistake Memory v1: recurring mistakes become a small deterministic signal in the next mission recommendation.
