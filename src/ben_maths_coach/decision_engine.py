@@ -14,6 +14,10 @@ from enum import Enum
 from ben_maths_coach.learner_dna import LearnerDNA
 from ben_maths_coach.topic_catalogue import Topic, TopicCatalogue
 
+MISTAKE_MEMORY_THRESHOLD = 2
+MISTAKE_MEMORY_WEIGHT = 0.05
+MAX_MISTAKE_MEMORY_WEIGHT = 0.20
+
 
 class ActivityType(str, Enum):
     """Kind of learning activity to do next."""
@@ -58,17 +62,44 @@ def _confidence_for_topic(learner: LearnerDNA, topic_id: str) -> float:
     return learner.confidence_by_topic.get(topic_id, 0.0)
 
 
+def _recurring_mistakes_for_topic(learner: LearnerDNA, topic_id: str) -> int:
+    """Return the total observed recurring mistake count for a topic."""
+    return sum(
+        mistake.occurrence_count
+        for mistake in learner.common_mistakes
+        if mistake.topic_id == topic_id
+        and mistake.occurrence_count >= MISTAKE_MEMORY_THRESHOLD
+    )
+
+
+def _mistake_memory_pressure(learner: LearnerDNA, topic_id: str) -> float:
+    """
+    Convert recurring mistakes into a small deterministic priority boost.
+
+    This lowers the topic's effective mastery for recommendation ranking only;
+    it does not change LearnerDNA mastery itself.
+    """
+    mistake_count = _recurring_mistakes_for_topic(learner, topic_id)
+    return min(
+        mistake_count * MISTAKE_MEMORY_WEIGHT,
+        MAX_MISTAKE_MEMORY_WEIGHT,
+    )
+
+
 def _choose_weakest_topic(learner: LearnerDNA, catalogue: TopicCatalogue) -> Topic:
     """
-    Pick the topic with the lowest mastery score.
+    Pick the topic with the lowest effective mastery score.
 
-    If two topics tie on mastery, lower confidence wins. If they also tie on
-    confidence, the smaller topic_id wins so the result is deterministic.
+    Recurring mistakes gently lower effective mastery for selection, so Atlas
+    can revisit topics where Ben is repeatedly getting tripped up. If two
+    topics tie, lower confidence wins. If they also tie on confidence, the
+    smaller topic_id wins so the result is deterministic.
     """
     return min(
         catalogue.topics,
         key=lambda topic: (
-            _mastery_for_topic(learner, topic.topic_id),
+            _mastery_for_topic(learner, topic.topic_id)
+            - _mistake_memory_pressure(learner, topic.topic_id),
             _confidence_for_topic(learner, topic.topic_id),
             topic.topic_id,
         ),
@@ -99,6 +130,7 @@ def _build_explanation(
     mastery: float,
     retention: float,
     confidence: float,
+    recurring_mistakes: int,
 ) -> tuple[str, list[str]]:
     """Return a main explanation and supporting reason bullets."""
     mastery_pct = round(mastery * 100)
@@ -127,6 +159,11 @@ def _build_explanation(
         f"Confidence on this topic: {confidence_pct}%.",
         f"Activity chosen: {activity_type.value}.",
     ]
+    if recurring_mistakes:
+        supporting_reasons.insert(
+            3,
+            f"Recurring mistakes on this topic: {recurring_mistakes} observations.",
+        )
     return explanation, supporting_reasons
 
 
@@ -139,7 +176,9 @@ def recommend_next_activity(
     Recommend the single best next learning activity.
 
     Simple rules for now:
-    1. Choose the topic with the lowest mastery (missing mastery counts as 0.0).
+    1. Choose the topic with the lowest effective mastery.
+       Missing mastery counts as 0.0, and recurring mistakes add a small
+       deterministic priority boost.
     2. If retention on that topic is below 0.4, recommend REVIEW.
     3. Else if mastery is below 0.5, recommend PRACTICE.
     4. Else recommend STRETCH.
@@ -154,9 +193,10 @@ def recommend_next_activity(
     mastery = _mastery_for_topic(learner, topic.topic_id)
     retention = _retention_for_topic(learner, topic.topic_id)
     confidence = _confidence_for_topic(learner, topic.topic_id)
+    recurring_mistakes = _recurring_mistakes_for_topic(learner, topic.topic_id)
     activity_type = _choose_activity_type(mastery, retention)
     explanation, supporting_reasons = _build_explanation(
-        topic, activity_type, mastery, retention, confidence
+        topic, activity_type, mastery, retention, confidence, recurring_mistakes
     )
 
     return LearningRecommendation(
