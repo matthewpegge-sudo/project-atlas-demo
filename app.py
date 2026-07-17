@@ -55,6 +55,7 @@ from ben_maths_coach.rewards_engine import (
     RewardEngine,
     RewardSummary,
 )
+from ben_maths_coach.session_review import build_session_review
 from ben_maths_coach.topic_catalogue import HIGHER_MATHS_CATALOGUE, TopicCatalogue
 
 
@@ -508,13 +509,24 @@ def render_streamlit_result(st_module: object, questions: list[Question]) -> Non
     topic_name = topic.name if topic is not None else summary.topic_id
     questions_answered = summary.questions_answered
     correct_answers = summary.correct_answers
+    next_recommendation = recommend_next_activity(
+        st.session_state.learner,
+        create_runnable_mission_catalogue(),
+        DecisionContext(available_minutes=25),
+    )
+    review = build_session_review(
+        summary,
+        attempts,
+        next_recommendation.topic_name,
+        next_recommendation.explanation,
+    )
 
     if correct_answers == questions_answered:
         st.success("Mission complete — all correct")
     else:
         st.info("Mission complete")
 
-    st.markdown("### Mission complete")
+    st.markdown("### Session review")
 
     with st.container(border=True):
         st.markdown(
@@ -526,7 +538,7 @@ def render_streamlit_result(st_module: object, questions: list[Question]) -> Non
         progress_cols = st.columns(3)
         progress_cols[0].metric(
             "Score",
-            f"{correct_answers} / {questions_answered}",
+            review.score_text,
         )
         progress_cols[1].metric(
             "Mastery",
@@ -538,21 +550,22 @@ def render_streamlit_result(st_module: object, questions: list[Question]) -> Non
             f"{summary.average_confidence}%",
         )
 
-        if correct_answers == questions_answered:
-            st.markdown(
-                "**What improved:** Ben completed every question correctly and "
-                "strengthened this skill."
-            )
-        elif summary.mistake_updated:
-            st.markdown(
-                "**What remains difficult:** Ben was confident on at least one "
-                "missed question, so Atlas recorded useful learning data to revisit."
-            )
-        else:
-            st.markdown(
-                "**What remains difficult:** Some of this topic needs another pass, "
-                "so Atlas will keep it in view."
-            )
+        answer_cols = st.columns(2)
+        correct_text = (
+            ", ".join(str(number) for number in review.correct_question_numbers)
+            or "None yet"
+        )
+        missed_text = (
+            ", ".join(str(number) for number in review.missed_question_numbers)
+            or "None"
+        )
+        answer_cols[0].metric("Got right", correct_text)
+        answer_cols[1].metric("Needs another look", missed_text)
+
+        st.markdown(f"**Confidence vs accuracy:** {review.confidence_summary}")
+        st.markdown(f"**What improved:** {review.what_went_well}")
+        st.markdown(f"**What remains difficult:** {review.what_to_revisit}")
+        st.markdown(f"**What Atlas learned:** {review.atlas_learned}")
 
     st.markdown("**Question review:**")
     for index, (question, attempt) in enumerate(zip(questions, attempts), start=1):
@@ -584,18 +597,13 @@ def render_streamlit_result(st_module: object, questions: list[Question]) -> Non
     )
     wallet_cols[2].metric("Lifetime coins", wallet.lifetime_coins)
 
-    next_recommendation = recommend_next_activity(
-        st.session_state.learner,
-        create_runnable_mission_catalogue(),
-        DecisionContext(available_minutes=25),
-    )
     with st.container(border=True):
         st.markdown(
             '<div class="mission-label">What Atlas will do next</div>',
             unsafe_allow_html=True,
         )
         st.markdown(f"**{next_recommendation.topic_name}**")
-        st.markdown(next_recommendation.explanation)
+        st.markdown(review.next_mission)
 
     if st.button("Return to Mission", use_container_width=True):
         return_to_streamlit_mission(st)
